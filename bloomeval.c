@@ -11,20 +11,22 @@ int bloomEvaluate( bloomModel *m,
     size_t buf_size = 512u*1024*1024;
     void *buf = (void *)malloc(buf_size);
 
+    float eps=1e-5f; //TODO WHY in hparam?
+
     struct ggml_init_params params = {
         .mem_size   = buf_size,
         .mem_buffer = buf,
     };
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = {};
-    gf.n_threads = n_threads;
+    //gf.n_threads = n_threads;
 
     struct ggml_tensor *embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32,n);
     memcpy(embd->data, embd_inp, n*ggml_element_size(embd)); //TODO kopioidaa ID? emvd tyyppi?
 
     struct ggml_tensor *inpL = ggml_get_rows(ctx0, m->tok_embeddings, embd);
     // word embeddings norm
-    inpL = ggml_norm(ctx0, inpL);
+    inpL = ggml_norm(ctx0, inpL,eps);
     inpL = ggml_mul(ctx0, ggml_repeat(ctx0, m->norm, inpL), inpL);
     inpL = ggml_add(ctx0, ggml_repeat(ctx0, m->norm_b, inpL), inpL);
 
@@ -33,7 +35,7 @@ int bloomEvaluate( bloomModel *m,
         struct ggml_tensor *cur;
         // norm
         {
-            cur = ggml_norm(ctx0, inpL);
+            cur = ggml_norm(ctx0, inpL,eps);
 
             // cur = attention_norm*cur
             cur = ggml_mul(ctx0,
@@ -95,7 +97,8 @@ int bloomEvaluate( bloomModel *m,
 
             // Alibi
             // KQ_scaled_alibi = KQ_scaled + alibi_bias //TODO: optimize
-            struct ggml_tensor *KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, n_past, m->hparams.n_head);
+            float TODOwhatIsMaxBias=999; //where load this? from original bloom checkpoint?
+            struct ggml_tensor *KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, n_past, m->hparams.n_head,TODOwhatIsMaxBias);
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor *KQ_masked = ggml_diag_mask_inf(ctx0, KQ_scaled_alibi, n_past);
@@ -138,7 +141,7 @@ int bloomEvaluate( bloomModel *m,
         {
             // norm
             {
-                cur = ggml_norm(ctx0, inpFF);
+                cur = ggml_norm(ctx0, inpFF,eps);
 
                 // cur = ffn_norm*cur + ffn_norm_b
                 cur = ggml_mul(ctx0,
@@ -167,7 +170,7 @@ int bloomEvaluate( bloomModel *m,
     }
     // norm
     {
-        inpL = ggml_norm(ctx0, inpL);
+        inpL = ggml_norm(ctx0, inpL,eps);
 
         // inpL = norm*inpL
         inpL = ggml_mul(ctx0,
@@ -187,7 +190,7 @@ int bloomEvaluate( bloomModel *m,
 
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute       (ctx0, &gf);
+    ggml_graph_compute_with_ctx(ctx0, &gf,n_threads);
     memcpy(embd_w, (float *) ggml_get_data(inpL) + (m->hparams.n_vocab*(n-1)), sizeof(float)*m->hparams.n_vocab);
     if (mem_per_token[0] == 0) {
         mem_per_token[0] = ggml_used_mem(ctx0)/n;

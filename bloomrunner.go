@@ -25,8 +25,8 @@ package bloomrunner
 //	}
 //	srand(time(NULL));
 //}
-// #cgo LDFLAGS: -L. -lstdc++ -lm
-// #cgo CXXFLAGS: -std=c++11 -I. -pthread -O3
+// #cgo LDFLAGS: -L. -L${SRCDIR}/src -lm
+// #cgo CPPFLAGS: -I. -I./ggml/include/ggml -pthread -O3
 import "C"
 import (
 	"fmt"
@@ -34,6 +34,12 @@ import (
 	"runtime"
 	"unsafe"
 )
+
+/*
+note to self...  ggml.c on root dir is symlink. need that so c sources are found in build
+TODO check how git handles symlink
+
+*/
 
 // Bloom model holds pointer to loaded bloom model
 type BloomModel struct {

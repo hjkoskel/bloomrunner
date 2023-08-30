@@ -47,7 +47,7 @@ folder example have example file
 
 On example directory, the simple way to build is
 ```bash
-gcc -std=c11 -pthread -I../ -O3 -lm example.c ../*.c
+gcc -std=c11 -pthread -I../ -I../ggml/include/ggml/ -O3 -lm example.c ../*.c
 ```
 
 ## Using in golang
